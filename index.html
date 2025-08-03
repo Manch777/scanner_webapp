@@ -1,32 +1,57 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <title>QR Сканер</title>
+  <script type="module">
+    import { BrowserQRCodeReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm";
+
+    const telegram = window.Telegram.WebApp;
+    const codeReader = new BrowserQRCodeReader();
+    const previewElem = document.getElementById("preview");
+    const videoElem = document.getElementById("video-preview");
+
+    async function startScanner() {
+      try {
+        const devices = await BrowserQRCodeReader.listVideoInputDevices();
+        if (devices.length === 0) {
+          previewElem.innerText = "Нет доступа к камере.";
+          return;
+        }
+
+        previewElem.innerText = "Камера готова. Наведи на QR-код...";
+
+        // Сканируем один раз, без переходов
+        const result = await codeReader.decodeOnceFromVideoDevice(undefined, videoElem);
+
+        const text = result.getText();
+        previewElem.innerText = `✅ QR: ${text}`;
+
+        // отправляем user_id в Telegram WebApp
+        if (telegram && telegram.sendData) {
+          telegram.sendData(text);
+        } else {
+          previewElem.innerText = "Ошибка: Telegram WebApp не инициализирован.";
+        }
+
+        // остановим сканер после одного сканирования
+        await codeReader.reset();
+      } catch (error) {
+        console.error(error);
+        previewElem.innerText = "❌ Ошибка сканирования.";
+      }
+    }
+
+    if (telegram && telegram.initData) {
+      startScanner();
+    } else {
+      previewElem.innerHTML = "<b>Открой через Telegram WebApp</b>";
+    }
+  </script>
 </head>
 <body>
   <h3>Сканируйте QR-код</h3>
-  <div id="reader" style="width:300px"></div>
-
-  <script>
-    function startScanner() {
-      const qrScanner = new Html5Qrcode("reader");
-
-      qrScanner.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: 250 },
-        (decodedText) => {
-          // редирект обратно в бота через deep link
-          window.location.href = `https://t.me/test1test123456test?start=${decodedText}`;
-          qrScanner.stop();
-        },
-        (error) => {}
-      ).catch(err => {
-        document.getElementById("reader").innerHTML = "Ошибка запуска сканера";
-      });
-    }
-
-    startScanner();
-  </script>
+  <div id="preview">Загрузка камеры...</div>
+  <video id="video-preview" width="300" style="margin-top:10px;" autoplay muted></video>
 </body>
 </html>
