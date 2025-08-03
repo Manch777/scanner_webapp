@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body>
+  <h3>Сканируйте QR-код</h3>
+  <div id="reader" style="width:300px"></div>
+
+  <script>
+    const telegram = window.Telegram.WebApp;
+    new Html5Qrcode("reader").start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      qr => {
+        telegram.sendData(qr);
+      }
+    );
+  </script>
+</body>
+</html>
