@@ -3,6 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <title>QR Сканер</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    #preview {
+      margin: 15px 0;
+      font-size: 16px;
+      color: #333;
+    }
+    video {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+  </style>
   <script type="module">
     import { BrowserQRCodeReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm";
 
@@ -13,36 +29,40 @@
 
     async function startScanner() {
       try {
+        console.log("⏳ Инициализация сканера...");
+
         const devices = await BrowserQRCodeReader.listVideoInputDevices();
+        console.log("📷 Найдено камер:", devices);
+
         if (devices.length === 0) {
-          previewElem.innerText = "Нет доступа к камере.";
+          previewElem.innerText = "❌ Нет доступа к камере или не найдены устройства.";
           return;
         }
 
         previewElem.innerText = "Камера готова. Наведи на QR-код...";
 
-        // Сканируем один раз, без переходов
         const result = await codeReader.decodeOnceFromVideoDevice(undefined, videoElem);
-
         const text = result.getText();
-        previewElem.innerText = `✅ QR: ${text}`;
 
-        // отправляем user_id в Telegram WebApp
+        previewElem.innerText = `✅ QR: ${text}`;
+        console.log("✅ Распознан QR:", text);
+
         if (telegram && telegram.sendData) {
           telegram.sendData(text);
         } else {
-          previewElem.innerText = "Ошибка: Telegram WebApp не инициализирован.";
+          previewElem.innerText = "❗ Telegram WebApp не инициализирован.";
         }
 
-        // остановим сканер после одного сканирования
         await codeReader.reset();
       } catch (error) {
-        console.error(error);
-        previewElem.innerText = "❌ Ошибка сканирования.";
+        console.error("🚫 Ошибка запуска сканера:", error);
+        previewElem.innerText = "❌ Ошибка камеры: " + error.message;
       }
     }
 
+    // Запускаем только внутри Telegram WebApp
     if (telegram && telegram.initData) {
+      previewElem.innerText = "Запрашиваем доступ к камере...";
       startScanner();
     } else {
       previewElem.innerHTML = "<b>Открой через Telegram WebApp</b>";
@@ -50,8 +70,8 @@
   </script>
 </head>
 <body>
-  <h3>Сканируйте QR-код</h3>
-  <div id="preview">Загрузка камеры...</div>
-  <video id="video-preview" width="300" style="margin-top:10px;" autoplay muted></video>
+  <h2>Сканируйте QR-код</h2>
+  <div id="preview">Загрузка...</div>
+  <video id="video-preview" width="300" autoplay muted playsinline></video>
 </body>
 </html>
