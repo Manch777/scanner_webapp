@@ -1,41 +1,32 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
   <meta charset="UTF-8">
-  <title>QR Сканер</title>
-  <script type="module">
-    import { BrowserQRCodeReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm";
-
-    const telegram = window.Telegram.WebApp;
-    const codeReader = new BrowserQRCodeReader();
-    const previewElem = document.getElementById("preview");
-
-    async function startScanner() {
-      try {
-        const videoInputDevices = await BrowserQRCodeReader.listVideoInputDevices();
-        if (videoInputDevices.length === 0) {
-          previewElem.innerText = "Нет доступа к камере.";
-          return;
-        }
-
-        const result = await codeReader.decodeOnceFromVideoDevice(undefined, "video-preview");
-        telegram.sendData(result.getText());
-      } catch (error) {
-        console.error(error);
-        previewElem.innerText = "Ошибка запуска камеры.";
-      }
-    }
-
-    if (telegram && telegram.initData) {
-      startScanner();
-    } else {
-      document.getElementById("preview").innerHTML = "<b>Откройте через Telegram WebApp</b>";
-    }
-  </script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 <body>
   <h3>Сканируйте QR-код</h3>
-  <div id="preview">Загрузка камеры...</div>
-  <video id="video-preview" width="300" style="margin-top:10px;" autoplay muted></video>
+  <div id="reader" style="width:300px"></div>
+
+  <script>
+    function startScanner() {
+      const qrScanner = new Html5Qrcode("reader");
+
+      qrScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        (decodedText) => {
+          // редирект обратно в бота через deep link
+          window.location.href = `https://t.me/ВАШ_ЮЗЕРНЕЙМ_БОТА?start=${decodedText}`;
+          qrScanner.stop();
+        },
+        (error) => {}
+      ).catch(err => {
+        document.getElementById("reader").innerHTML = "Ошибка запуска сканера";
+      });
+    }
+
+    startScanner();
+  </script>
 </body>
 </html>
