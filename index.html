@@ -10,13 +10,32 @@
 
   <script>
     const telegram = window.Telegram.WebApp;
-    new Html5Qrcode("reader").start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
-      qr => {
-        telegram.sendData(qr);
-      }
-    );
+
+    function startScanner() {
+      new Html5Qrcode("reader").start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        (qr) => {
+          if (telegram && telegram.sendData) {
+            telegram.sendData(qr);
+          } else {
+            alert("Не внутри Telegram WebApp");
+          }
+        },
+        (error) => {
+          // console.log("Ошибка сканера: ", error);
+        }
+      ).catch(err => {
+        document.getElementById("reader").innerHTML = "Ошибка запуска сканера";
+        console.error(err);
+      });
+    }
+
+    if (telegram && telegram.initData) {
+      startScanner();
+    } else {
+      document.getElementById("reader").innerHTML = "<b>Пожалуйста, откройте ссылку через Telegram</b>";
+    }
   </script>
 </body>
 </html>
