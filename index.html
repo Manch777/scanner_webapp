@@ -1,41 +1,41 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <script src="https://unpkg.com/html5-qrcode"></script>
-</head>
-<body>
-  <h3>Сканируйте QR-код</h3>
-  <div id="reader" style="width:300px"></div>
+  <title>QR Сканер</title>
+  <script type="module">
+    import { BrowserQRCodeReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm";
 
-  <script>
     const telegram = window.Telegram.WebApp;
+    const codeReader = new BrowserQRCodeReader();
+    const previewElem = document.getElementById("preview");
 
-    function startScanner() {
-      new Html5Qrcode("reader").start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: 250 },
-        (qr) => {
-          if (telegram && telegram.sendData) {
-            telegram.sendData(qr);
-          } else {
-            alert("Не внутри Telegram WebApp");
-          }
-        },
-        (error) => {
-          // console.log("Ошибка сканера: ", error);
+    async function startScanner() {
+      try {
+        const videoInputDevices = await BrowserQRCodeReader.listVideoInputDevices();
+        if (videoInputDevices.length === 0) {
+          previewElem.innerText = "Нет доступа к камере.";
+          return;
         }
-      ).catch(err => {
-        document.getElementById("reader").innerHTML = "Ошибка запуска сканера";
-        console.error(err);
-      });
+
+        const result = await codeReader.decodeOnceFromVideoDevice(undefined, "video-preview");
+        telegram.sendData(result.getText());
+      } catch (error) {
+        console.error(error);
+        previewElem.innerText = "Ошибка запуска камеры.";
+      }
     }
 
     if (telegram && telegram.initData) {
       startScanner();
     } else {
-      document.getElementById("reader").innerHTML = "<b>Пожалуйста, откройте ссылку через Telegram</b>";
+      document.getElementById("preview").innerHTML = "<b>Откройте через Telegram WebApp</b>";
     }
   </script>
+</head>
+<body>
+  <h3>Сканируйте QR-код</h3>
+  <div id="preview">Загрузка камеры...</div>
+  <video id="video-preview" width="300" style="margin-top:10px;" autoplay muted></video>
 </body>
 </html>
