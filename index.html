@@ -46,10 +46,22 @@
         previewElem.innerText = `✅ QR: ${userId}`;
 
         // редирект в Telegram бота
-        const botUsername = "Test_zhazhda_bot"; // <--- ЗАМЕНИ ЭТО
+        const botUsername = "Test_zhazhda_bot"; // ← здесь имя твоего бота (без @)
         window.location.href = `https://t.me/${botUsername}?start=${userId}`;
 
         await codeReader.reset();
       } catch (error) {
         console.error("Ошибка:", error);
-        previewElem.in
+        previewElem.innerText = "❌ Ошибка сканирования: " + error.message;
+      }
+    }
+
+    startScanner();
+  </script>
+</head>
+<body>
+  <h2>Сканируйте QR-код</h2>
+  <div id="preview">Загрузка камеры...</div>
+  <video id="video-preview" width="300" autoplay muted playsinline></video>
+</body>
+</html>
