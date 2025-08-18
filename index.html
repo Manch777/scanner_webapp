@@ -3,83 +3,100 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Сканер QR-кодов</title>
+  <title>Сканер QR</title>
   <style>
-    body { font-family: system-ui, sans-serif; padding: 16px; text-align: center; }
-    video { width: 100%; max-width: 720px; border: 1px solid #ddd; border-radius: 8px; }
-    #start { padding: 10px 16px; font-size: 16px; border-radius: 8px; border: none; }
-    #preview { margin: 12px 0; color: #333; }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;text-align:center;padding:16px}
+    h2{margin:0 0 8px}
+    #log{margin:8px 0 12px;color:#333;white-space:pre-line}
+    video{width:100%;max-width:720px;border:1px solid #ddd;border-radius:10px}
+    button{padding:10px 16px;border:none;border-radius:10px;font-size:16px}
   </style>
-
   <script type="module">
     import { BrowserQRCodeReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm";
 
-    const preview = document.getElementById('preview');
-    const video   = document.getElementById('video');
-    const btn     = document.getElementById('start');
+    const log   = (t)=>document.getElementById('log').textContent=t;
+    const video = document.getElementById('video');
+    const btn   = document.getElementById('start');
 
-    if (window.Telegram?.WebApp) Telegram.WebApp.ready();
+    // Гарантируем, что работаем именно в Telegram WebApp
+    if (window.Telegram && Telegram.WebApp) {
+      Telegram.WebApp.ready();
+      Telegram.WebApp.expand();
+    } else {
+      log("⚠️ Откройте эту страницу из кнопки бота с web_app.");
+    }
 
     const reader = new BrowserQRCodeReader();
     let controls = null;
 
-    function finish(payload) {
-      // 1) Отправляем в бота
-      try { Telegram?.WebApp?.sendData(payload); } catch {}
-      // 2) Останавливаем камеру
+    function stopCamera() {
       try { controls?.stop(); } catch {}
-      // 3) Небольшая вибрация и закрываем мини-приложение
-      try { Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success'); } catch {}
-      // Небольшая задержка на отправку
-      setTimeout(() => {
-        try { Telegram?.WebApp?.close(); } catch { window.close(); }
-      }, 100);
-      preview.textContent = "✅ Отправлено, закрываю…";
+      try {
+        const s = video.srcObject;
+        if (s && typeof s.getTracks === 'function') {
+          s.getTracks().forEach(t => { try { t.stop(); } catch {} });
+        }
+        video.srcObject = null;   // важно для iOS
+      } catch {}
+    }
+
+    function sendAndClose(payload) {
+      try { Telegram.WebApp.sendData(String(payload)); } catch {}
+      stopCamera();
+      try { Telegram.WebApp.HapticFeedback?.notificationOccurred('success'); } catch {}
+      log("✅ Отправлено, закрываю…");
+
+      // Несколько попыток закрыть WebApp (iOS иногда «упирается»)
+      try { Telegram.WebApp.close(); } catch {}
+      setTimeout(()=>{ try { Telegram.WebApp.close(); } catch {} }, 120);
+      setTimeout(()=>{ try { Telegram.WebApp.close(); } catch {} }, 300);
     }
 
     async function startScan() {
-      preview.textContent = "Запрашиваю доступ к камере…";
       btn.disabled = true;
-
       try {
-        // Явно вызываем системный запрос доступа (важно для iOS)
-        await navigator.mediaDevices.getUserMedia({ video: true }).then(s => s.getTracks().forEach(t => t.stop())).catch(()=>{});
+        // Явно запросим разрешение на камеру (особенно важно на iOS)
+        await navigator.mediaDevices.getUserMedia({ video: true })
+          .then(s => s.getTracks().forEach(t => t.stop()))
+          .catch(()=>{});
+        log("Камера активна. Наведите на QR…");
 
-        preview.textContent = "Камера активна. Наведите на QR…";
-
-        // Сканируем с тыльной камеры, без reset()
         controls = await reader.decodeFromConstraints(
           { video: { facingMode: { ideal: "environment" } } },
           video,
           (result, err) => {
             if (result) {
-              const text = (result.getText() || "").trim();
-              finish(text); // ← вот здесь отправка и закрытие
+              const txt = (result.getText() || "").trim();
+              if (txt) sendAndClose(txt);
             }
           }
         );
       } catch (e) {
         console.error(e);
-        if (e?.name === "NotAllowedError") {
-          preview.textContent = "⚠️ Доступ к камере запрещён. Разрешите камеру и откройте заново.";
-        } else if (e?.name === "NotFoundError") {
-          preview.textContent = "❌ Камера не найдена.";
-        } else {
-          preview.textContent = "❌ Ошибка: " + (e?.message || e);
-        }
+        if (e?.name === "NotAllowedError") log("❌ Доступ к камере запрещён.");
+        else if (e?.name === "NotFoundError") log("❌ Камера не найдена.");
+        else log("❌ Ошибка: " + (e?.message || e));
         btn.disabled = false;
       }
     }
 
+    // Тестовая кнопка — проверка sendData/close без камеры
+    window.testSend = () => sendAndClose("ping:test");
+
     btn.addEventListener('click', startScan);
+    window.addEventListener('pagehide', stopCamera);    // на всякий случай
+    window.addEventListener('beforeunload', stopCamera);
   </script>
 </head>
 <body>
   <h2>Сканируйте QR-код</h2>
-  <div id="preview">Нажмите «Начать», чтобы дать доступ к камере.</div>
+  <div id="log">Готово. Нажмите «Начать сканирование».</div>
   <button id="start">Начать сканирование</button>
-  <div style="margin:12px 0;"></div>
+  <div style="height:10px"></div>
   <video id="video" playsinline autoplay muted></video>
-  <p style="opacity:.6">Открывайте эту страницу из Telegram-кнопки с <code>web_app</code>.</p>
+  <div style="margin-top:10px">
+    <button onclick="testSend()">Проверить отправку</button>
+  </div>
+  <p style="opacity:.6">Открывайте эту страницу только из Telegram-кнопки с <code>web_app</code>.</p>
 </body>
 </html>
