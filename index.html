@@ -14,83 +14,47 @@
   <!-- Обязательно подключаем Telegram WebApp JS -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <!-- ZXing для сканирования -->
-  <script type="module">
-    import { BrowserQRCodeReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm";
+<script type="module">
+  import { BrowserQRCodeReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm";
 
-    // Если страницу кто-то открыл не из Telegram, можно включить запасной deep-link
-    const BOT_USERNAME_FALLBACK = "Test_zhazhda_bot"; // без @, только для отладки/вне Telegram
+  const previewElem = document.getElementById("preview");
+  const videoElem   = document.getElementById("video-preview");
 
-    document.addEventListener("DOMContentLoaded", () => {
-      const previewElem = document.getElementById("preview");
-      const videoElem = document.getElementById("video-preview");
+  if (window.Telegram?.WebApp) Telegram.WebApp.ready();
 
-      // Делаем WebApp готовым (устанавливает тему и пр.)
-      if (window.Telegram && Telegram.WebApp) {
-        Telegram.WebApp.ready();
+  const reader = new BrowserQRCodeReader();
+
+  async function sendToTelegram(payload) {
+    if (window.Telegram?.WebApp) {
+      Telegram.WebApp.sendData(payload);
+      previewElem.textContent = "✅ Отправлено в Telegram, можно закрыть окно.";
+      setTimeout(() => { try { Telegram.WebApp.close(); } catch {} }, 300);
+    }
+  }
+
+  try {
+    const devices = await BrowserQRCodeReader.listVideoInputDevices();
+    if (!devices.length) {
+      previewElem.textContent = "❌ Камера недоступна.";
+      return;
+    }
+    const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
+    previewElem.textContent = "Камера активна. Наведите на QR…";
+
+    // Стартуем сканирование с коллбэком и получаем controls
+    const controls = await reader.decodeFromVideoDevice(backCam.deviceId, videoElem, (result, err) => {
+      if (result) {
+        const payload = (result.getText() || "").trim();
+        controls.stop();              // <-- корректно останавливаем камеру
+        sendToTelegram(payload);      // <-- отправляем в бота
       }
-
-      const codeReader = new BrowserQRCodeReader();
-
-      async function sendToTelegram(payload) {
-        try {
-          if (window.Telegram && Telegram.WebApp) {
-            Telegram.WebApp.sendData(payload);           // <-- ключевая строка
-            previewElem.innerText = "✅ Данные отправлены в Telegram. Окно можно закрыть.";
-            // Чуть-чуть подождём и закроем
-            setTimeout(() => {
-              try { Telegram.WebApp.close(); } catch (_) {}
-            }, 300);
-          } else {
-            // Фолбэк: не в Telegram — откроем бота обычным deep-link (на случай тестов в браузере)
-            window.location.href = `https://t.me/${BOT_USERNAME_FALLBACK}?start=${encodeURIComponent(payload)}`;
-          }
-        } catch (e) {
-          console.error(e);
-          previewElem.innerText = "❌ Ошибка отправки в Telegram: " + (e?.message || e);
-        }
-      }
-
-      async function startScanner() {
-        try {
-          // Список камер
-          const devices = await BrowserQRCodeReader.listVideoInputDevices();
-          if (!devices || devices.length === 0) {
-            previewElem.innerText = "❌ Камера недоступна. Проверьте разрешения и HTTPS.";
-            return;
-          }
-
-          // Выбираем тыловую камеру, если найдётся
-          const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
-
-          previewElem.innerText = "Камера активна. Наведите на QR-код...";
-
-          // Сканируем РОВНО один код и останавливаемся
-          const result = await codeReader.decodeOnceFromVideoDevice(backCam.deviceId, videoElem);
-          let payload = (result?.getText?.() || "").trim();
-
-          if (!payload) {
-            previewElem.innerText = "⚠️ Пустой QR.";
-            await codeReader.reset();
-            return;
-          }
-
-          // (необязательно) Если хотите, можете привести формат:
-          // Например, если в QR только число и вы хотите всегда слать как row_id:
-          // if (/^\d+$/.test(payload)) payload = `R:${payload}`;
-
-          previewElem.innerText = "✅ QR считан. Отправляем...";
-          await codeReader.reset(); // останавливаем камеру
-          await sendToTelegram(payload);
-        } catch (err) {
-          console.error("Ошибка сканирования:", err);
-          previewElem.innerText = "❌ Ошибка сканирования: " + (err?.message || err);
-          try { await codeReader.reset(); } catch (_) {}
-        }
-      }
-
-      startScanner();
+      // ошибки в err можно игнорировать — они сыпятся пока детектор ищет код
     });
-  </script>
+  } catch (e) {
+    console.error(e);
+    previewElem.textContent = "❌ Ошибка сканирования: " + (e?.message || e);
+  }
+</script>
 </head>
 <body>
   <h2>Сканируйте QR-код</h2>
